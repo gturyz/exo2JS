@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css">
+    <title>Document</title>
+</head>
+<body>
+    <div class="container">
+        <div id="total">0</div>
+        <div class="grid">
+            <div id="depenses">0</div>
+            <div id="recettes">0</div>
+        </div>
+        <table role="grid">
+            <thead>
+                <tr>
+                    <th scope="col">Id</th>
+                    <th scope="col">Nom</th>
+                    <th scope="col">Montant</th>
+                    <th scope="col">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="js-list-depenses">
+            </tbody>
+        </table>
+        <form class="js-form-add">
+            <h1>Ajouter un Dépense / une Recette</h1>
+            <div class="grid">
+        
+                <label for="nom">
+                    Nom
+                    <input type="text" id="nom" name="nom" placeholder="Nom" required>
+                </label>
+            
+                <label for="montant">
+                    Montant
+                    <input type="number" id="montant" name="montant" placeholder="Montant" required>
+                </label>
+            
+            </div>
+          
+            <input type="submit" value="Envoyer">
+          
+          </form>
+    </div>
+    <script src="https://unpkg.com/joi@17.4.2/dist/joi-browser.min.js"></script>
+    <script>
+
+        const schemaDepensePut = joi.object({
+            id: joi.number().required(),
+            nom : joi.string().required(),
+            montant : joi.number().required()
+        });
+
+        const schemaDepensePost = joi.object({
+            nom : joi.string().required(),
+            montant : joi.number().required()
+        });
+
+        window.addEventListener("DOMContentLoaded"  , async() => {
+
+            const reponse = await fetch("http://localhost:4221/depenses" )
+            const depenses = await reponse.json(); 
+
+            document.querySelector(".js-list-depenses").innerHTML = genererFormsDepenses(depenses);
+
+            document.querySelector("#total").innerHTML = `<h2><center>Total : ${depenses.reduce((total, {montant}) => total + montant, 0)}</center></h2>`;
+            document.querySelector("#depenses").innerHTML = `<h2><center>Dépenses : ${depenses.reduce((total, {montant}) => montant>0?total + montant:total, 0)}</center></h2>`;
+            document.querySelector("#recettes").innerHTML = `<h2><center>Recettes : ${depenses.reduce((total, {montant}) => montant<0?total + montant:total, 0)}</center></h2>`;
+
+            document.querySelector(".js-list-depenses").addEventListener("click" , async e => {
+                e.preventDefault();
+                if(e.target.className.includes("btn")){
+                    const form = e.target.form;
+                    const action = e.target.value ;
+                    const id = form.id.value
+                    if(action == "modifier"){
+                        const data = {
+                            id : id,
+                            nom : form.nom.value,
+                            montant: form.montant.value
+                        }
+
+                        const{value , error} =  schemaDepensePut.validate(data , {abortEarly : false});
+                        if(error) return console.log(error.details);
+
+                        const options = { method : "PUT" , body : JSON.stringify(value) , headers : {'Content-Type': 'application/json'} }
+                        await fetch("http://localhost:4221/depenses/"+id , options)
+                    } else if(action == "supprimer") {
+                        const options = {method : "DELETE"}
+                        await fetch("http://localhost:4221/depenses/"+id , options);
+                    }
+                }
+            })
+        })
+        function genererFormsDepenses(data){
+
+            if(data.length === 0) return "<h2><center>Veuillez ajouter des dépenses</center></h2>";
+
+            return data.map( d => {
+                return `<tr>
+                    <form id="${d.id}${d.nom}${d.montant}">
+                        <th scope="row"><input type="hidden" name="id" value="${d.id}" form="${d.id}${d.nom}${d.montant}">${d.id}</th>
+                        <td><input type="text" id="nom" name="nom" placeholder="Nom" value="${d.nom}" form="${d.id}${d.nom}${d.montant}" required></td>
+                        <td><input type="number" id="montant" name="montant" placeholder="Montant" value="${d.montant}" form="${d.id}${d.nom}${d.montant}" required></td>
+                        <td><input class="btn" form="${d.id}${d.nom}${d.montant}" type="submit" value="modifier"><input class="btn" form="${d.id}${d.nom}${d.montant}" type="submit" value="supprimer"></td>
+                    </form>
+                </tr>`
+            } ).join("");
+        }
+        document.querySelector(".js-form-add").addEventListener("submit" , async (e) => {
+            e.preventDefault();
+
+            const data = {
+                nom : e.target.nom.value,
+                montant : e.target.montant.value
+            }
+
+            const{value , error} =  schemaDepensePost.validate(data , {abortEarly : false});
+            if(error) return console.log(error.details);
+
+            const optionsRequete = { method : "POST" , body : JSON.stringify(value) , headers :  {'Content-Type': 'application/json'}  }
+            const reponse = await fetch("http://localhost:4221/depenses" , optionsRequete)
+
+            if(reponse.status) e.target.reset()
+
+        });
+    </script>
+</body>
+</html>
